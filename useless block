@@ -3,9 +3,132 @@
     "use strict";
 
     if (!Scratch.extensions.unsandboxed) {
-        throw new Error(
-            "cần chạy ở chế độ Unsandboxed!"
+        throw new Error("Hãy bật chế độ Unsandboxed!");
+    }
+
+    const COLORS = [
+        "#ff3838", "#ff8c00", "#ffe600",
+        "#39ff14", "#00e5ff", "#1683ff",
+        "#b84dff", "#ff42a1", "#ffffff"
+    ];
+
+    function explode(block) {
+        const svg = block.getSvgRoot();
+        if (!svg) return;
+
+        const rect = svg.getBoundingClientRect();
+
+        // Tạo SVG phủ toàn màn hình
+        const overlay = document.createElementNS(
+            "http://www.w3.org/2000/svg", "svg"
         );
+
+        Object.assign(overlay.style, {
+            position: "fixed",
+            left: "0",
+            top: "0",
+            width: "100vw",
+            height: "100vh",
+            overflow: "hidden",
+            pointerEvents: "none",
+            zIndex: "999999"
+        });
+
+        overlay.setAttribute("viewBox",
+            `0 0 ${window.innerWidth} ${window.innerHeight}`);
+
+        document.body.appendChild(overlay);
+
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+
+        // Vòng sáng nổ
+        const ring = document.createElementNS(
+            "http://www.w3.org/2000/svg", "circle"
+        );
+
+        ring.setAttribute("cx", cx);
+        ring.setAttribute("cy", cy);
+        ring.setAttribute("r", 4);
+        ring.setAttribute("fill", "none");
+        ring.setAttribute("stroke", "#ffffff");
+        ring.setAttribute("stroke-width", "5");
+        overlay.appendChild(ring);
+
+        const particles = [];
+
+        // Tạo 90 particle nhiều màu
+        for (let i = 0; i < 90; i++) {
+            const p = document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                i % 3 === 0 ? "circle" : "rect"
+            );
+
+            const size = 3 + Math.random() * 8;
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 2 + Math.random() * 12;
+
+            if (p.tagName === "circle") {
+                p.setAttribute("r", size / 2);
+            } else {
+                p.setAttribute("width", size);
+                p.setAttribute("height", size);
+                p.setAttribute("x", -size / 2);
+                p.setAttribute("y", -size / 2);
+            }
+
+            p.setAttribute("fill",
+                COLORS[Math.floor(Math.random() * COLORS.length)]);
+
+            overlay.appendChild(p);
+
+            particles.push({
+                el: p,
+                x: cx,
+                y: cy,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                rotation: Math.random() * 360,
+                spin: (Math.random() - 0.5) * 25
+            });
+        }
+
+        const start = performance.now();
+        const duration = 850;
+
+        function frame(now) {
+            if (!overlay.isConnected) return;
+
+            const t = Math.min((now - start) / duration, 1);
+
+            for (const p of particles) {
+                p.x += p.vx;
+                p.y += p.vy;
+
+                p.vx *= 0.975;
+                p.vy = p.vy * 0.975 + 0.12;
+                p.rotation += p.spin;
+
+                p.el.setAttribute(
+                    "transform",
+                    `translate(${p.x} ${p.y}) rotate(${p.rotation})`
+                );
+
+                p.el.setAttribute("opacity", 1 - t);
+            }
+
+            ring.setAttribute("r", 4 + t * 65);
+            ring.setAttribute("opacity", 1 - t);
+            ring.setAttribute("stroke-width", 5 * (1 - t));
+
+            if (t < 1) {
+                requestAnimationFrame(frame);
+            } else {
+                overlay.remove();
+            }
+        }
+
+        requestAnimationFrame(frame);
     }
 
     class UselessBlock {
@@ -15,13 +138,12 @@
                 name: "Useless Block",
                 color1: "#e74c3c",
                 color2: "#c0392b",
-                blocks: [
-                    {
-                        opcode: "deleteSelf",
-                        blockType: Scratch.BlockType.COMMAND,
-                        text: "useless block"
-                    }
-                ]
+                color3: "#962d22",
+                blocks: [{
+                    opcode: "deleteSelf",
+                    blockType: Scratch.BlockType.COMMAND,
+                    text: "useless block"
+                }]
             };
         }
 
@@ -29,11 +151,19 @@
             const ws = window.ScratchBlocks?.getMainWorkspace();
             if (!ws) return;
 
-            const blockId = util.thread.peekStack();
-            if (!blockId) return;
+            const id = util.thread.peekStack();
+            const block = id ? ws.getBlockById(id) : null;
 
-            const block = ws.getBlockById(blockId);
-            if (block) {
+            if (!block || block.__uselessDeleting) return;
+            block.__uselessDeleting = true;
+
+            try {
+                explode(block);
+            } catch (e) {
+                console.error("[Useless Block]", e);
+            }
+
+            if (block.workspace) {
                 block.dispose(true);
             }
         }
