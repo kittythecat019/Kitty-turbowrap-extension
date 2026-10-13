@@ -1,0 +1,43 @@
+
+(function (Scratch) {
+    "use strict";
+
+    if (!Scratch.extensions.unsandboxed) {
+        throw new Error(
+            "cần chạy ở chế độ Unsandboxed!"
+        );
+    }
+
+    class UselessBlock {
+        getInfo() {
+            return {
+                id: "uselessblock",
+                name: "Useless Block",
+                color1: "#e74c3c",
+                color2: "#c0392b",
+                blocks: [
+                    {
+                        opcode: "deleteSelf",
+                        blockType: Scratch.BlockType.COMMAND,
+                        text: "useless block"
+                    }
+                ]
+            };
+        }
+
+        deleteSelf(args, util) {
+            const ws = window.ScratchBlocks?.getMainWorkspace();
+            if (!ws) return;
+
+            const blockId = util.thread.peekStack();
+            if (!blockId) return;
+
+            const block = ws.getBlockById(blockId);
+            if (block) {
+                block.dispose(true);
+            }
+        }
+    }
+
+    Scratch.extensions.register(new UselessBlock());
+})(Scratch);
