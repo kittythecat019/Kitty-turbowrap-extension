@@ -3,8 +3,11 @@
     "use strict";
 
     if (!Scratch.extensions.unsandboxed) {
-        throw new Error("Hãy bật chế độ Unsandboxed!");
+        throw new Error("Useless Block cần chạy Unsandboxed!");
     }
+
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const SB = window.ScratchBlocks;
 
     const COLORS = [
         "#ff3838", "#ff8c00", "#ffe600",
@@ -12,38 +15,40 @@
         "#b84dff", "#ff42a1", "#ffffff"
     ];
 
-    // Lấy vị trí sân khấu trên màn hình
-    function getStageRect() {
-        const canvas = document.querySelector(
-            ".stage-wrapper canvas"
-        ) || document.querySelector("canvas");
+    // Màu gốc cam vàng
+    const COLOR1 = "#FFB52E";
+    const COLOR2 = "#E99518";
+    const COLOR3 = "#B86B08";
 
-        return canvas ? canvas.getBoundingClientRect() : null;
+    // ==========================================
+    // PARTICLE EXPLOSION
+    // ==========================================
+
+    function getStageRect() {
+        const canvas = document.querySelector(".stage-wrapper canvas");
+
+        if (canvas) return canvas.getBoundingClientRect();
+
+        const canvases = [...document.querySelectorAll("canvas")];
+        const stage = canvases.find(c =>
+            c.width >= 400 && c.height >= 300
+        );
+
+        return stage ? stage.getBoundingClientRect() : null;
     }
 
-    // Tạo pháo hoa tại tọa độ Scratch (x, y)
     function explodeAt(x, y) {
-        const stageRect = getStageRect();
-        if (!stageRect) {
-            console.warn("[Firework] Không tìm thấy sân khấu!");
-            return;
-        }
+        const rect = getStageRect();
+        if (!rect || !rect.width || !rect.height) return;
 
-        // Scratch: x từ -240 đến 240, y từ -180 đến 180
-        const screenX = stageRect.left +
-            (x + 240) / 480 * stageRect.width;
+        const cx = rect.left + (x + 240) / 480 * rect.width;
+        const cy = rect.top + (180 - y) / 360 * rect.height;
 
-        const screenY = stageRect.top +
-            (180 - y) / 360 * stageRect.height;
-
-        const overlay = document.createElementNS(
-            "http://www.w3.org/2000/svg", "svg"
-        );
+        const overlay = document.createElementNS(SVG_NS, "svg");
 
         Object.assign(overlay.style, {
             position: "fixed",
-            left: "0",
-            top: "0",
+            inset: "0",
             width: "100vw",
             height: "100vh",
             overflow: "hidden",
@@ -58,17 +63,13 @@
 
         document.body.appendChild(overlay);
 
-        const ring = document.createElementNS(
-            "http://www.w3.org/2000/svg", "circle"
-        );
-
-        ring.setAttribute("cx", screenX);
-        ring.setAttribute("cy", screenY);
-        ring.setAttribute("r", "4");
+        const ring = document.createElementNS(SVG_NS, "circle");
+        ring.setAttribute("cx", cx);
+        ring.setAttribute("cy", cy);
+        ring.setAttribute("r", 4);
         ring.setAttribute("fill", "none");
         ring.setAttribute("stroke", "#ffffff");
-        ring.setAttribute("stroke-width", "5");
-
+        ring.setAttribute("stroke-width", 5);
         overlay.appendChild(ring);
 
         const particles = [];
@@ -76,7 +77,7 @@
         for (let i = 0; i < 90; i++) {
             const isCircle = i % 3 === 0;
             const p = document.createElementNS(
-                "http://www.w3.org/2000/svg",
+                SVG_NS,
                 isCircle ? "circle" : "rect"
             );
 
@@ -87,10 +88,10 @@
             if (isCircle) {
                 p.setAttribute("r", size / 2);
             } else {
-                p.setAttribute("width", size);
-                p.setAttribute("height", size);
                 p.setAttribute("x", -size / 2);
                 p.setAttribute("y", -size / 2);
+                p.setAttribute("width", size);
+                p.setAttribute("height", size);
             }
 
             p.setAttribute(
@@ -102,8 +103,8 @@
 
             particles.push({
                 el: p,
-                x: screenX,
-                y: screenY,
+                x: cx,
+                y: cy,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
                 rotation: Math.random() * 360,
@@ -114,7 +115,7 @@
         const start = performance.now();
         const duration = 850;
 
-        function frame(now) {
+        function animate(now) {
             if (!overlay.isConnected) return;
 
             const t = Math.min((now - start) / duration, 1);
@@ -135,48 +136,105 @@
 
             ring.setAttribute("r", 4 + t * 65);
             ring.setAttribute("opacity", 1 - t);
-            ring.setAttribute(
-                "stroke-width",
-                5 * (1 - t)
-            );
+            ring.setAttribute("stroke-width", 5 * (1 - t));
 
-            if (t < 1) {
-                requestAnimationFrame(frame);
-            } else {
-                overlay.remove();
-            }
+            if (t < 1) requestAnimationFrame(animate);
+            else overlay.remove();
         }
 
-        requestAnimationFrame(frame);
+        requestAnimationFrame(animate);
     }
 
-    // Pháo hoa tại vị trí khối (dùng cho useless block)
     function explodeAtBlock(block) {
-        const svg = block.getSvgRoot();
+        const svg = block?.getSvgRoot?.();
         if (!svg) return;
 
-        const rect = svg.getBoundingClientRect();
-        const stageRect = getStageRect();
+        const r = svg.getBoundingClientRect();
+        const stage = getStageRect();
 
-        if (!stageRect) return;
+        if (!stage || !stage.width || !stage.height) return;
 
-        const x = (rect.left + rect.width / 2 -
-            stageRect.left) / stageRect.width * 480 - 240;
+        const x =
+            ((r.left + r.width / 2 - stage.left) / stage.width) * 480 - 240;
 
-        const y = 180 - (rect.top + rect.height / 2 -
-            stageRect.top) / stageRect.height * 360;
+        const y =
+            180 - ((r.top + r.height / 2 - stage.top) / stage.height) * 360;
 
         explodeAt(x, y);
     }
 
+    // ==========================================
+    // RAINBOW COLORS
+    // Chỉ đổi màu các khối trong workspace
+    // ==========================================
+
+    let hue = 0;
+    let colorTimerStarted = false;
+
+    function startRainbow() {
+        if (colorTimerStarted) return;
+        colorTimerStarted = true;
+
+        function update() {
+            try {
+                const workspace = SB?.getMainWorkspace?.();
+
+                if (workspace) {
+                    const color = `hsl(${hue}, 100%, 55%)`;
+                    const darker = `hsl(${hue}, 100%, 42%)`;
+                    const darkest = `hsl(${hue}, 100%, 32%)`;
+
+                    for (const block of workspace.getAllBlocks(false)) {
+                        if (
+                            block.type !== "uselessblock_deleteSelf" &&
+                            block.type !== "uselessblock_firework"
+                        ) {
+                            continue;
+                        }
+
+                        if (!block.workspace) continue;
+
+                        try {
+                            block.setColour(color, darker, darkest);
+                        } catch (error) {
+                            const root = block.getSvgRoot?.();
+
+                            if (root) {
+                                root.querySelectorAll(".blocklyPath")
+                                    .forEach(path => {
+                                        path.style.fill = color;
+                                        path.style.stroke = darker;
+                                    });
+                            }
+                        }
+                    }
+                }
+
+                hue = (hue + 3) % 360;
+            } catch (error) {
+                console.error("[Useless Block] Rainbow:", error);
+            }
+
+            setTimeout(update, 50);
+        }
+
+        update();
+    }
+
     class UselessBlock {
+        constructor() {
+            startRainbow();
+        }
+
         getInfo() {
             return {
                 id: "uselessblock",
                 name: "Useless Block",
-                color1: "#e74c3c",
-                color2: "#c0392b",
-                color3: "#962d22",
+
+                color1: COLOR1,
+                color2: COLOR2,
+                color3: COLOR3,
+
                 blocks: [
                     {
                         opcode: "deleteSelf",
@@ -203,19 +261,20 @@
         }
 
         deleteSelf(args, util) {
-            const ws = window.ScratchBlocks?.getMainWorkspace();
+            const ws = SB?.getMainWorkspace?.();
             if (!ws) return;
 
-            const id = util.thread.peekStack();
+            const id = util?.thread?.peekStack?.();
             const block = id ? ws.getBlockById(id) : null;
 
-            if (!block || block.__uselessDeleting) return;
-            block.__uselessDeleting = true;
+            if (!block || block.__deleting) return;
+
+            block.__deleting = true;
 
             try {
                 explodeAtBlock(block);
-            } catch (e) {
-                console.error("[Useless Block]", e);
+            } catch (error) {
+                console.error("[Useless Block] Explosion:", error);
             }
 
             if (block.workspace) {
