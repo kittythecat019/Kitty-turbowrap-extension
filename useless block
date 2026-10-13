@@ -12,13 +12,30 @@
         "#b84dff", "#ff42a1", "#ffffff"
     ];
 
-    function explode(block) {
-        const svg = block.getSvgRoot();
-        if (!svg) return;
+    // Lấy vị trí sân khấu trên màn hình
+    function getStageRect() {
+        const canvas = document.querySelector(
+            ".stage-wrapper canvas"
+        ) || document.querySelector("canvas");
 
-        const rect = svg.getBoundingClientRect();
+        return canvas ? canvas.getBoundingClientRect() : null;
+    }
 
-        // Tạo SVG phủ toàn màn hình
+    // Tạo pháo hoa tại tọa độ Scratch (x, y)
+    function explodeAt(x, y) {
+        const stageRect = getStageRect();
+        if (!stageRect) {
+            console.warn("[Firework] Không tìm thấy sân khấu!");
+            return;
+        }
+
+        // Scratch: x từ -240 đến 240, y từ -180 đến 180
+        const screenX = stageRect.left +
+            (x + 240) / 480 * stageRect.width;
+
+        const screenY = stageRect.top +
+            (180 - y) / 360 * stageRect.height;
+
         const overlay = document.createElementNS(
             "http://www.w3.org/2000/svg", "svg"
         );
@@ -34,41 +51,40 @@
             zIndex: "999999"
         });
 
-        overlay.setAttribute("viewBox",
-            `0 0 ${window.innerWidth} ${window.innerHeight}`);
+        overlay.setAttribute(
+            "viewBox",
+            `0 0 ${window.innerWidth} ${window.innerHeight}`
+        );
 
         document.body.appendChild(overlay);
 
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-
-        // Vòng sáng nổ
         const ring = document.createElementNS(
             "http://www.w3.org/2000/svg", "circle"
         );
 
-        ring.setAttribute("cx", cx);
-        ring.setAttribute("cy", cy);
-        ring.setAttribute("r", 4);
+        ring.setAttribute("cx", screenX);
+        ring.setAttribute("cy", screenY);
+        ring.setAttribute("r", "4");
         ring.setAttribute("fill", "none");
         ring.setAttribute("stroke", "#ffffff");
         ring.setAttribute("stroke-width", "5");
+
         overlay.appendChild(ring);
 
         const particles = [];
 
-        // Tạo 90 particle nhiều màu
         for (let i = 0; i < 90; i++) {
+            const isCircle = i % 3 === 0;
             const p = document.createElementNS(
                 "http://www.w3.org/2000/svg",
-                i % 3 === 0 ? "circle" : "rect"
+                isCircle ? "circle" : "rect"
             );
 
             const size = 3 + Math.random() * 8;
             const angle = Math.random() * Math.PI * 2;
             const speed = 2 + Math.random() * 12;
 
-            if (p.tagName === "circle") {
+            if (isCircle) {
                 p.setAttribute("r", size / 2);
             } else {
                 p.setAttribute("width", size);
@@ -77,15 +93,17 @@
                 p.setAttribute("y", -size / 2);
             }
 
-            p.setAttribute("fill",
-                COLORS[Math.floor(Math.random() * COLORS.length)]);
+            p.setAttribute(
+                "fill",
+                COLORS[Math.floor(Math.random() * COLORS.length)]
+            );
 
             overlay.appendChild(p);
 
             particles.push({
                 el: p,
-                x: cx,
-                y: cy,
+                x: screenX,
+                y: screenY,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
                 rotation: Math.random() * 360,
@@ -104,7 +122,6 @@
             for (const p of particles) {
                 p.x += p.vx;
                 p.y += p.vy;
-
                 p.vx *= 0.975;
                 p.vy = p.vy * 0.975 + 0.12;
                 p.rotation += p.spin;
@@ -113,13 +130,15 @@
                     "transform",
                     `translate(${p.x} ${p.y}) rotate(${p.rotation})`
                 );
-
                 p.el.setAttribute("opacity", 1 - t);
             }
 
             ring.setAttribute("r", 4 + t * 65);
             ring.setAttribute("opacity", 1 - t);
-            ring.setAttribute("stroke-width", 5 * (1 - t));
+            ring.setAttribute(
+                "stroke-width",
+                5 * (1 - t)
+            );
 
             if (t < 1) {
                 requestAnimationFrame(frame);
@@ -131,6 +150,25 @@
         requestAnimationFrame(frame);
     }
 
+    // Pháo hoa tại vị trí khối (dùng cho useless block)
+    function explodeAtBlock(block) {
+        const svg = block.getSvgRoot();
+        if (!svg) return;
+
+        const rect = svg.getBoundingClientRect();
+        const stageRect = getStageRect();
+
+        if (!stageRect) return;
+
+        const x = (rect.left + rect.width / 2 -
+            stageRect.left) / stageRect.width * 480 - 240;
+
+        const y = 180 - (rect.top + rect.height / 2 -
+            stageRect.top) / stageRect.height * 360;
+
+        explodeAt(x, y);
+    }
+
     class UselessBlock {
         getInfo() {
             return {
@@ -139,11 +177,28 @@
                 color1: "#e74c3c",
                 color2: "#c0392b",
                 color3: "#962d22",
-                blocks: [{
-                    opcode: "deleteSelf",
-                    blockType: Scratch.BlockType.COMMAND,
-                    text: "useless block"
-                }]
+                blocks: [
+                    {
+                        opcode: "deleteSelf",
+                        blockType: Scratch.BlockType.COMMAND,
+                        text: "useless block"
+                    },
+                    {
+                        opcode: "firework",
+                        blockType: Scratch.BlockType.COMMAND,
+                        text: "firework block x: [X] y: [Y]",
+                        arguments: {
+                            X: {
+                                type: Scratch.ArgumentType.NUMBER,
+                                defaultValue: 0
+                            },
+                            Y: {
+                                type: Scratch.ArgumentType.NUMBER,
+                                defaultValue: 0
+                            }
+                        }
+                    }
+                ]
             };
         }
 
@@ -158,7 +213,7 @@
             block.__uselessDeleting = true;
 
             try {
-                explode(block);
+                explodeAtBlock(block);
             } catch (e) {
                 console.error("[Useless Block]", e);
             }
@@ -166,6 +221,13 @@
             if (block.workspace) {
                 block.dispose(true);
             }
+        }
+
+        firework(args) {
+            const x = Math.max(-240, Math.min(240, Number(args.X) || 0));
+            const y = Math.max(-180, Math.min(180, Number(args.Y) || 0));
+
+            explodeAt(x, y);
         }
     }
 
